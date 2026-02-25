@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>3D Sphere ADMIN VERSION</title>
+
+<style>
+body{
+  margin:0;
+  height:100vh;
+  overflow:hidden;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-direction:column;
+  perspective:1200px;
+  font-family:Arial;
+  background:black;
+  --x:50%;
+  --y:50%;
+}
+
+/* Glow theo chuột */
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background: radial-gradient(circle at var(--x) var(--y),
+  rgba(0,255,255,0.25), transparent 40%);
+  z-index:-1;
+  pointer-events:none;
+}
+
+/* Nebula */
+body::after{
+  content:"";
+  position:fixed;
+  width:900px;
+  height:900px;
+  background:radial-gradient(circle,
+  rgba(120,0,255,0.25),
+  rgba(0,0,255,0.15),
+  transparent 70%);
+  filter:blur(160px);
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  z-index:-2;
+}
+
+#bg{
+  position:fixed;
+  inset:0;
+  z-index:-3;
+}
+
+.sphere{
+  position:relative;
+  width:0;
+  height:0;
+  transform-style:preserve-3d;
+}
+
+.text{
+  position:absolute;
+  font-weight:bold;
+  color:#00ffff;
+  white-space:nowrap;
+  text-shadow:
+    0 0 5px #00ffff,
+    0 0 15px #00ffff,
+    0 0 30px #00ffff;
+  transition:opacity 0.2s, font-size 0.2s;
+}
+
+.controls{
+  position:fixed;
+  bottom:20px;
+  left:20px;
+  display:flex;
+  gap:8px;
+}
+
+.controls input{
+  padding:8px;
+  font-size:16px;
+}
+
+.controls button{
+  padding:8px 12px;
+  font-size:16px;
+  cursor:pointer;
+}
+
+/* HEART */
+.heart-wrapper{
+  position:absolute;
+  transform-style:preserve-3d;
+}
+
+.heart3d{
+  position:relative;
+  width:140px;
+  height:130px;
+  transform-style:preserve-3d;
+  animation:
+    heartbeat 0.83s ease-in-out infinite,
+    glow 2s ease-in-out infinite alternate;
+}
+
+.heart-face{
+  position:absolute;
+  width:70px;
+  height:110px;
+  background:rgba(255,0,0,0.25);
+  border-radius:70px 70px 0 0;
+  backdrop-filter: blur(4px);
+  box-shadow:
+    0 0 30px rgba(255,0,0,0.6),
+    inset 0 0 20px rgba(255,255,255,0.3);
+}
+
+.left-front{ left:70px; transform:rotate(-45deg) translateZ(12px); transform-origin:0 100%; }
+.right-front{ left:0; transform:rotate(45deg) translateZ(12px); transform-origin:100% 100%; }
+.left-back{ left:70px; transform:rotate(-45deg) translateZ(-12px); transform-origin:0 100%; opacity:0.6; }
+.right-back{ left:0; transform:rotate(45deg) translateZ(-12px); transform-origin:100% 100%; opacity:0.6; }
+
+.heart-text{
+  position:absolute;
+  inset:0;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  color:white;
+  font-weight:bold;
+  font-size:30px;
+  text-shadow:0 0 15px white;
+  transform:translateZ(25px);
+}
+
+@keyframes heartbeat{
+  0%{transform:scale(1);}
+  15%{transform:scale(1.08);}
+  30%{transform:scale(1);}
+  45%{transform:scale(1.05);}
+  70%{transform:scale(1);}
+  100%{transform:scale(1);}
+}
+
+@keyframes glow{
+  from{filter:drop-shadow(0 0 10px red);}
+  to{filter:drop-shadow(0 0 25px red);}
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="bg"></canvas>
+<div class="sphere" id="sphere"></div>
+
+<div class="controls">
+  <input type="text" id="textInput" placeholder="Nhập chữ mới...">
+  <button onclick="addText()">Thêm</button>
+  <button id="resetBtn" onclick="resetTexts()" style="display:none;">Reset</button>
+  <button id="clearBtn" onclick="clearTexts()" style="display:none;">Xoá hết</button>
+</div>
+
+<script>
+
+/* ADMIN */
+const ADMIN_PASSWORD="12a9pro";
+let adminMode=false;
+
+document.addEventListener("keydown",e=>{
+  if(e.ctrlKey && e.shiftKey && e.key.toLowerCase()==="k"){
+    if(!adminMode){
+      const pass=prompt("Nhập mật khẩu admin:");
+      if(pass===ADMIN_PASSWORD){
+        adminMode=true;
+        resetBtn.style.display="inline-block";
+        clearBtn.style.display="inline-block";
+        alert("Admin mode ON 😎");
+      }else alert("Sai mật khẩu!");
+    }else{
+      adminMode=false;
+      resetBtn.style.display="none";
+      clearBtn.style.display="none";
+      alert("Admin mode OFF");
+    }
+  }
+});
+
+/* Glow */
+document.addEventListener("mousemove",e=>{
+  document.body.style.setProperty('--x', e.clientX+'px');
+  document.body.style.setProperty('--y', e.clientY+'px');
+});
+
+/* PARTICLES */
+const canvas=bg;
+const ctx=canvas.getContext("2d");
+function resize(){ canvas.width=innerWidth; canvas.height=innerHeight;}
+resize(); addEventListener("resize",resize);
+
+let particles=[...Array(120)].map(()=>({
+  x:Math.random()*canvas.width,
+  y:Math.random()*canvas.height,
+  r:Math.random()*2,
+  dx:(Math.random()-0.5)*0.3,
+  dy:(Math.random()-0.5)*0.3
+}));
+
+(function animateBg(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="white";
+  particles.forEach(p=>{
+    p.x+=p.dx; p.y+=p.dy;
+    if(p.x<0||p.x>canvas.width)p.dx*=-1;
+    if(p.y<0||p.y>canvas.height)p.dy*=-1;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fill();
+  });
+  requestAnimationFrame(animateBg);
+})();
+
+/* SPHERE */
+let defaultTexts=["Xin chào 🌍","12A9","Ultra Galaxy","3D Sphere"];
+let texts=JSON.parse(localStorage.getItem("sphereTexts"))||defaultTexts;
+
+const sphere=document.getElementById("sphere");
+const radius=200;
+let textElements=[];
+
+let angleX=0,angleY=0;
+let autoRotateSpeed=0.15;
+let isDragging=false,lastX,lastY;
+let velocityX=0,velocityY=0;
+let friction=0.95;
+
+function saveTexts(){
+  localStorage.setItem("sphereTexts",JSON.stringify(texts));
+}
+
+function renderSphere(){
+  sphere.innerHTML="";
+  const count=texts.length||1;
+
+  texts.forEach((content,i)=>{
+    const div=document.createElement("div");
+    div.className="text";
+    div.innerText=content;
+
+    const phi=Math.acos(-1+(2*i)/count);
+    const theta=Math.sqrt(count*Math.PI)*phi;
+
+    div.dataset.x=radius*Math.cos(theta)*Math.sin(phi);
+    div.dataset.y=radius*Math.sin(theta)*Math.sin(phi);
+    div.dataset.z=radius*Math.cos(phi);
+
+    sphere.appendChild(div);
+  });
+
+  const wrapper=document.createElement("div");
+  wrapper.className="heart-wrapper";
+  wrapper.innerHTML=`
+  <div class="heart3d">
+    <div class="heart-face left-front"></div>
+    <div class="heart-face right-front"></div>
+    <div class="heart-face left-back"></div>
+    <div class="heart-face right-back"></div>
+    <div class="heart-text">12A9</div>
+  </div>`;
+  sphere.appendChild(wrapper);
+
+  textElements=[...document.querySelectorAll(".text")];
+  saveTexts();
+}
+renderSphere();
+
+function addText(){
+  const v=textInput.value.trim();
+  if(!v) return;
+  texts.push(v);
+  textInput.value="";
+  renderSphere();
+}
+
+function resetTexts(){ texts=[...defaultTexts]; renderSphere(); }
+function clearTexts(){ texts=[]; renderSphere(); }
+
+/* Drag */
+document.addEventListener("mousedown",e=>{
+  isDragging=true; lastX=e.clientX; lastY=e.clientY;
+});
+document.addEventListener("mousemove",e=>{
+  if(!isDragging)return;
+  velocityY=(e.clientX-lastX)*0.2;
+  velocityX=-(e.clientY-lastY)*0.2;
+  angleY+=velocityY;
+  angleX+=velocityX;
+  lastX=e.clientX; lastY=e.clientY;
+});
+document.addEventListener("mouseup",()=>isDragging=false);
+
+/* Animate */
+(function animate(){
+  if(!isDragging){
+    angleY+=autoRotateSpeed+velocityY;
+    angleX+=velocityX;
+    velocityX*=friction;
+    velocityY*=friction;
+  }
+
+  sphere.style.transform=
+    `rotateX(${angleX}deg) rotateY(${angleY}deg)`;
+
+  textElements.forEach(el=>{
+    el.style.transform=`
+      translate3d(${el.dataset.x}px,
+                  ${el.dataset.y}px,
+                  ${el.dataset.z}px)
+      rotateY(${-angleY}deg)
+      rotateX(${-angleX}deg)
+    `;
+    let depth=(el.dataset.z+radius)/(2*radius);
+    el.style.opacity=depth;
+    el.style.fontSize=(14+depth*12)+"px";
+  });
+
+  const heart=document.querySelector(".heart-wrapper");
+  if(heart){
+    heart.style.transform=
+      `rotateY(${-angleY}deg) rotateX(${-angleX}deg)`;
+  }
+
+  requestAnimationFrame(animate);
+})();
+
+</script>
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBHE_-8e_7Agy0Ikpooc1P6bul_30Vo0Ps",
+  authDomain: "a9nvd-ecf75.firebaseapp.com",
+  databaseURL: "https://a9nvd-ecf75-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "a9nvd-ecf75",
+  storageBucket: "a9nvd-ecf75.firebasestorage.app",
+  messagingSenderId: "680205202501",
+  appId: "1:680205202501:web:52f414cd6b0cf84a8c5f2c",
+  measurementId: "G-FJGYK6QL50"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+console.log("Firebase connected");
+
+</script>
+</body>
+</html>
